@@ -24,9 +24,9 @@ export async function POST(req: NextRequest) {
 
     const {
       message,
-      bookId,
-      subject,
-      gradeLevel,
+      bookId = "science-g1",
+      subject = "Science",
+      gradeLevel = "Grade 1",
       history = [],
     }: {
       message: string;
@@ -40,22 +40,24 @@ export async function POST(req: NextRequest) {
       return new Response("Message is required", { status: 400 });
     }
 
-    // 1. Retrieve relevant textbook chunks via Supabase pgvector RAG
+    // 1. Retrieve relevant textbook chunks via Supabase Hybrid RAG
     let contextChunks: string[] = [];
     try {
       const queryEmbedding = await embedText(message);
       const { texts } = await querySimilarChunks(
         queryEmbedding,
         5,
-        { bookId, subject, gradeLevel }
+        { bookId, subject, gradeLevel },
+        message
       );
       contextChunks = texts;
     } catch (ragErr) {
       console.warn("Supabase RAG query warning:", ragErr);
     }
 
-    // 2. Build Socratic system prompt with RAG context
-    const systemPrompt = buildSocraticPrompt(contextChunks);
+    // 2. Build Socratic system prompt with RAG context & book metadata
+    const bookTitle = bookId === "science-g1" ? "Infinity Science - Book 1" : "Textbook";
+    const systemPrompt = buildSocraticPrompt(contextChunks, bookTitle, subject, gradeLevel);
 
     const groq = getGroqClient();
 
