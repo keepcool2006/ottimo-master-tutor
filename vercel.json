@@ -1,0 +1,6 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "cd ottimo-master-tutor && npm run build",
+  "installCommand": "cd ottimo-master-tutor && npm install",
+  "outputDirectory": "ottimo-master-tutor/.next"
+}
