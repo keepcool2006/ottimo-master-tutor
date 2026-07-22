@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
-import { Send, Bot, User, Loader2, Sparkles } from "lucide-react";
+import { Send, Bot, User, Loader2, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BookMetadata } from "@/lib/books";
 import "katex/dist/katex.min.css";
@@ -26,7 +26,7 @@ export default function ChatInterface({ selectedBook }: ChatInterfaceProps) {
       id: "welcome",
       role: "assistant",
       content:
-        "Hi! I'm **Ottimo**, your AI learning companion 🎓\n\nI'm here to help you understand your textbook using the Socratic method — I'll guide you to discover answers yourself rather than just giving direct homework answers.\n\nAsk me anything about your textbook or a science/math topic you are exploring!",
+        "Hi! I'm **Ottimo**, your AI learning companion 🎓\n\nI'm grounded in your textbook **Infinity Science - Book 1**.\n\nAsk me anything about your textbook or chapters (e.g., *Explain Chapter 4* or *What is Chapter 13 about?*)!",
       timestamp: new Date(),
     },
   ]);
@@ -39,9 +39,21 @@ export default function ChatInterface({ selectedBook }: ChatInterfaceProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const handleClearChat = () => {
+    setMessages([
+      {
+        id: "welcome-" + Date.now(),
+        role: "assistant",
+        content:
+          "Chat reset! Ask me anything about **Infinity Science - Book 1** or a chapter you want to explore!",
+        timestamp: new Date(),
+      },
+    ]);
+  };
+
   const getHistoryForApi = () =>
     messages
-      .filter((m) => m.id !== "welcome")
+      .filter((m) => !m.id.startsWith("welcome"))
       .map((m) => ({
         role: m.role === "assistant" ? "assistant" : "user",
         content: m.content,
@@ -76,9 +88,9 @@ export default function ChatInterface({ selectedBook }: ChatInterfaceProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
-          bookId: selectedBook?.id,
-          subject: selectedBook?.subject,
-          gradeLevel: selectedBook?.gradeLevel,
+          bookId: selectedBook?.id || "science-g1",
+          subject: selectedBook?.subject || "Science",
+          gradeLevel: selectedBook?.gradeLevel || "Grade 1",
           history: getHistoryForApi(),
         }),
       });
@@ -110,27 +122,28 @@ export default function ChatInterface({ selectedBook }: ChatInterfaceProps) {
           if (dataStr === "[DONE]") break;
 
           try {
-            const { text: chunkText } = JSON.parse(dataStr);
-            if (chunkText) {
+            const parsed = JSON.parse(dataStr);
+            if (parsed.text) {
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantMsgId
-                    ? { ...m, content: m.content + chunkText }
+                    ? { ...m, content: m.content + parsed.text }
                     : m
                 )
               );
             }
           } catch {
-            // Ignore parse errors on SSE buffer chunks
+            // Ignore partial SSE parsing issues
           }
         }
       }
     } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : "Something went wrong";
+      const errorMsg =
+        err instanceof Error ? err.message : "Something went wrong";
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMsgId
-            ? { ...m, content: `⚠️ *${errMsg}. Please try again.*` }
+            ? { ...m, content: `⚠️ ${errorMsg}. Please try again!` }
             : m
         )
       );
@@ -147,29 +160,36 @@ export default function ChatInterface({ selectedBook }: ChatInterfaceProps) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0d0d1a] border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
-      {/* Header banner */}
-      <div className="px-5 py-3.5 bg-black/40 border-b border-white/10 flex items-center justify-between flex-shrink-0">
+    <div className="flex flex-col h-full bg-slate-950/80 rounded-2xl border border-white/10 shadow-2xl backdrop-blur-xl overflow-hidden">
+      {/* Header */}
+      <div className="p-4 bg-white/5 border-b border-white/10 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-teal-400 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-teal-500/20">
-            <Bot className="w-4 h-4" />
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-400 to-cyan-600 flex items-center justify-center text-white shadow-lg shadow-teal-500/20">
+            <Bot className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-white text-sm">Ottimo Socratic Guide</span>
+              <h2 className="font-semibold text-sm text-white">
+                Ottimo Socratic Guide
+              </h2>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-300">
                 Groq AI · Llama 3.3
               </span>
             </div>
             <p className="text-xs text-gray-400">
-              {selectedBook ? (
-                <>Grounded in <span className="text-teal-300">{selectedBook.title}</span> ({selectedBook.subject})</>
-              ) : (
-                "Socratic learning companion"
-              )}
+              Grounded in <span className="text-teal-300">{selectedBook?.title || "Infinity Science - Book 1"}</span> ({selectedBook?.subject || "Science"})
             </p>
           </div>
         </div>
+
+        <button
+          onClick={handleClearChat}
+          title="Clear Chat / New Conversation"
+          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+          <span>New Chat</span>
+        </button>
       </div>
 
       {/* Messages list */}
@@ -190,7 +210,11 @@ export default function ChatInterface({ selectedBook }: ChatInterfaceProps) {
                   : "bg-gradient-to-br from-teal-500 to-cyan-600"
               )}
             >
-              {m.role === "user" ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
+              {m.role === "user" ? (
+                <User className="w-3.5 h-3.5" />
+              ) : (
+                <Bot className="w-3.5 h-3.5" />
+              )}
             </div>
 
             <div
@@ -206,9 +230,19 @@ export default function ChatInterface({ selectedBook }: ChatInterfaceProps) {
                   remarkPlugins={[remarkMath]}
                   rehypePlugins={[rehypeKatex]}
                   components={{
-                    p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                    ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>,
-                    ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>,
+                    p: ({ children }) => (
+                      <p className="mb-2 last:mb-0">{children}</p>
+                    ),
+                    ul: ({ children }) => (
+                      <ul className="list-disc pl-4 mb-2 space-y-1">
+                        {children}
+                      </ul>
+                    ),
+                    ol: ({ children }) => (
+                      <ol className="list-decimal pl-4 mb-2 space-y-1">
+                        {children}
+                      </ol>
+                    ),
                     code: ({ children }) => (
                       <code className="bg-black/30 px-1.5 py-0.5 rounded font-mono text-[11px] text-teal-300">
                         {children}
@@ -224,31 +258,26 @@ export default function ChatInterface({ selectedBook }: ChatInterfaceProps) {
             </div>
           </div>
         ))}
-
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Form */}
-      <div className="p-4 bg-black/40 border-t border-white/10 flex-shrink-0">
-        <div className="flex items-end gap-2 bg-white/5 border border-white/10 rounded-2xl p-2 focus-within:border-teal-500/50 transition-colors">
+      {/* Input area */}
+      <div className="p-4 bg-white/5 border-t border-white/10">
+        <div className="relative flex items-center">
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={
-              selectedBook
-                ? `Ask Ottimo about ${selectedBook.title}...`
-                : "Ask Ottimo a question..."
-            }
+            placeholder={`Ask Ottimo about ${selectedBook?.title || "Infinity Science - Book 1"}...`}
             rows={1}
-            className="flex-1 bg-transparent border-0 resize-none text-xs text-white placeholder-gray-500 focus:outline-none max-h-32 p-1.5"
+            disabled={isStreaming}
+            className="w-full bg-black/40 text-white text-xs rounded-xl pl-4 pr-12 py-3 border border-white/10 focus:border-teal-500 focus:outline-none resize-none placeholder-gray-500 disabled:opacity-50"
           />
-
           <button
             onClick={handleSend}
             disabled={!input.trim() || isStreaming}
-            className="p-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-md shadow-teal-500/20"
+            className="absolute right-2 p-2 rounded-lg bg-gradient-to-r from-teal-500 to-cyan-600 text-white disabled:opacity-30 hover:opacity-90 transition shadow-md shadow-teal-500/20"
           >
             {isStreaming ? (
               <Loader2 className="w-4 h-4 animate-spin" />
